@@ -62,7 +62,7 @@ export const generateImage = async (prompt: string): Promise<GeneratedImage> => 
     },
     config: {
       imageConfig: {
-        imageSize: "1K",
+        imageSize: "2K",
         aspectRatio: "1:1"
       }
     }
@@ -176,7 +176,7 @@ const cleanupImage = async (base64Image: string, mimeType: string): Promise<Gene
             ]
         },
         config: {
-            imageConfig: { imageSize: "1K", aspectRatio: "1:1" }
+            imageConfig: { imageSize: "2K", aspectRatio: "1:1" }
         }
     });
 
@@ -216,11 +216,11 @@ export const editImageWithDrawing = async (
     You are an expert AI photo retoucher and inpainting specialist.
     
     INPUTS:
-    1. IMAGE 1: The Clean Source Image.
-    2. IMAGE 2: The Annotated Reference Image. This is identical to Image 1 but contains BRIGHT NEON ANNOTATIONS overlaying specific areas.
+    1. IMAGE 1: The Clean Source Image (use this as the base for your output).
+    2. IMAGE 2: The Annotated Reference Image. This is identical to Image 1 but contains BRIGHT NEON COLORED ANNOTATIONS overlaying specific areas.
 
     TASK:
-    Modify IMAGE 1 based on the instructions below.
+    Modify IMAGE 1 based on the instructions below, using IMAGE 2 ONLY to identify WHERE to edit.
 
     GLOBAL INSTRUCTION (Applies to the entire image style/scene):
     "${globalInstruction || 'Keep the overall style and scene consistent, focusing on the specific edits below.'}"
@@ -229,18 +229,33 @@ export const editImageWithDrawing = async (
     ${instructionText || 'No specific region edits provided.'}
 
     CRITICAL INSTRUCTIONS FOR IMAGE PROCESSING:
-    1. **INTERPRETATION**: The neon lines/circles in IMAGE 2 are purely **meta-data annotations** to indicate *where* to edit. They are NOT part of the physical scene.
-    2. **REMOVAL**: You must conceptually **ERASE** these neon markings. The final output must NOT contain any bright neon lines, circles, or scribbles.
-    3. **EXECUTION**: 
-       - Look at the neon annotations in IMAGE 2 to identify the target regions.
-       - Apply the user's specific text instructions to those regions in the context of IMAGE 1.
-       - Apply the GLOBAL INSTRUCTION to the overall image mood/style if specified.
-       - Generate a photorealistic result that blends seamlessly with the original lighting and texture of IMAGE 1.
+    1. **INTERPRETATION**: The bright neon colored lines/circles/scribbles in IMAGE 2 (specifically Cyan #00FFFF, Magenta #FF00FF, Yellow #FFFF00, or Lime/Green #00FF00) are PURELY UI ANNOTATIONS to indicate *where* to edit. They are NOT part of the physical scene and MUST be completely removed.
     
-    FINAL CHECK:
-    - Does the output image look like a real photograph?
-    - Have all neon marker lines been completely removed?
-    - Are the requested edits applied correctly?
+    2. **COLOR REMOVAL**: You must completely ERASE and INPAINT over ALL neon colored markings. The final output must contain ZERO traces of:
+       - Bright Cyan (#00FFFF) lines or areas
+       - Bright Magenta (#FF00FF) lines or areas  
+       - Bright Yellow (#FFFF00) lines or areas
+       - Bright Lime/Green (#00FF00) lines or areas
+       These colors are digital UI markers and should NEVER appear in the final photorealistic output.
+    
+    3. **EXECUTION PROCESS**: 
+       - Use IMAGE 2 ONLY to identify the target regions (where the neon colors appear)
+       - Apply the user's specific text instructions to those regions using IMAGE 1 as the base
+       - Apply the GLOBAL INSTRUCTION to the overall image mood/style if specified
+       - Inpaint and blend the edited regions seamlessly with IMAGE 1's original lighting, texture, and style
+       - Generate a photorealistic result that looks like a natural photograph
+    
+    4. **OUTPUT REQUIREMENTS**:
+       - The output must be based on IMAGE 1, not IMAGE 2
+       - All neon colored annotations must be completely removed and inpainted
+       - The edited regions must blend naturally with the rest of the image
+       - No digital artifacts, neon colors, or UI markers should remain
+    
+    FINAL CHECKLIST:
+    - Does the output image look like a real, natural photograph?
+    - Have ALL neon colored markers (Cyan, Magenta, Yellow, Green) been completely removed?
+    - Are the requested edits applied correctly to the identified regions?
+    - Does the image maintain photorealistic quality throughout?
   `;
 
   const response = await ai.models.generateContent({
@@ -266,7 +281,7 @@ export const editImageWithDrawing = async (
     },
     config: {
       imageConfig: {
-        imageSize: "1K", // Maintain resolution
+        imageSize: "2K", // Maintain resolution
         aspectRatio: "1:1"
       }
     }

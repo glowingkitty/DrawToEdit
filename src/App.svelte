@@ -4,7 +4,7 @@
   import type { GeneratedImage, DrawingState, Session } from '../types';
   import { Loader2, Send, Eraser, Download, Image as ImageIcon, RotateCcw, Sparkles, Trash2, Palette, Plus, Layout, Key } from 'lucide-svelte';
 
-  const CANVAS_SIZE = 1024;
+  const CANVAS_SIZE = 2048;
   const MASK_COLORS = [
     { hex: '#00FFFF', name: 'Cyan', tailwind: 'bg-[#00FFFF]' },
     { hex: '#FF00FF', name: 'Magenta', tailwind: 'bg-[#FF00FF]' },
@@ -78,26 +78,66 @@
     sessions = sessions.map(s => s.id === activeSessionId ? { ...s, ...updates } : s);
   }
 
-  const getCompositeImage = async (drawingUrl: string, originalUrl: string): Promise<string> => {
+  /**
+   * Creates a composite image by overlaying the drawing canvas on top of the original image.
+   * Both images are processed at full 2K resolution (2048x2048) to maintain quality.
+   * 
+   * @param drawingDataUrl - Data URL of the drawing canvas overlay (from CanvasLayer)
+   * @param originalBase64 - Base64 encoded original image (without data URL prefix)
+   * @param originalMimeType - MIME type of the original image (e.g., 'image/png')
+   * @returns Promise resolving to base64 encoded composite image (JPEG format, without data URL prefix)
+   */
+  const getCompositeImage = async (drawingDataUrl: string, originalBase64: string, originalMimeType: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const imgOriginal = new Image();
       imgOriginal.crossOrigin = "anonymous";
       const imgDrawing = new Image();
       imgDrawing.crossOrigin = "anonymous";
+      
+      // Create canvas at 2K resolution to match image generation size
       const canvas = document.createElement('canvas');
-      canvas.width = CANVAS_SIZE;
-      canvas.height = CANVAS_SIZE;
+      canvas.width = CANVAS_SIZE; // 2048
+      canvas.height = CANVAS_SIZE; // 2048
       const ctx = canvas.getContext('2d');
       if (!ctx) return reject('No context');
+      
+      // Construct data URL from base64 to ensure we're using the full resolution image
+      const originalDataUrl = `data:${originalMimeType};base64,${originalBase64}`;
+      
       imgOriginal.onload = () => {
         imgDrawing.onload = () => {
-          ctx.drawImage(imgOriginal, 0, 0, canvas.width, canvas.height);
-          ctx.drawImage(imgDrawing, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.95).split(',')[1]);
+          console.log('[getCompositeImage] Original image dimensions:', imgOriginal.width, 'x', imgOriginal.height);
+          console.log('[getCompositeImage] Drawing canvas dimensions:', imgDrawing.width, 'x', imgDrawing.height);
+          console.log('[getCompositeImage] Composite canvas dimensions:', canvas.width, 'x', canvas.height);
+          
+          // Clear canvas to ensure clean composite
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Draw original image at its native resolution (should be 2048x2048 for 2K images)
+          // Using native dimensions ensures no quality loss from scaling
+          ctx.drawImage(imgOriginal, 0, 0, imgOriginal.width, imgOriginal.height);
+          
+          // Draw drawing overlay at its native resolution (should be 2048x2048)
+          // This ensures the drawing marks align perfectly with the original image
+          ctx.drawImage(imgDrawing, 0, 0, imgDrawing.width, imgDrawing.height);
+          
+          // Export as JPEG at high quality (0.95) to maintain detail
+          // Split to get just the base64 data without the data URL prefix
+          const compositeBase64 = canvas.toDataURL('image/jpeg', 0.95).split(',')[1];
+          console.log('[getCompositeImage] Composite image created successfully at 2K resolution');
+          resolve(compositeBase64);
         };
-        imgDrawing.src = drawingUrl;
+        imgDrawing.onerror = (err) => {
+          console.error('[getCompositeImage] Error loading drawing image:', err);
+          reject(new Error('Failed to load drawing canvas'));
+        };
+        imgDrawing.src = drawingDataUrl;
       };
-      imgOriginal.src = originalUrl;
+      imgOriginal.onerror = (err) => {
+        console.error('[getCompositeImage] Error loading original image:', err);
+        reject(new Error('Failed to load original image'));
+      };
+      imgOriginal.src = originalDataUrl;
     });
   };
 
@@ -135,11 +175,16 @@
     isLoading = true;
     errorMessage = null;
     try {
+      // Start with the original base64 image
       let compositeBase64 = session.image.base64;
+      
+      // If there's a drawing overlay, create a composite image at full 2K resolution
       if (hasDrawing && canvasLayer) {
         const drawingDataUrl = canvasLayer.getDataUrl();
         if (drawingDataUrl) {
-          compositeBase64 = await getCompositeImage(drawingDataUrl, session.image.url);
+          console.log('[handleEdit] Creating composite image with drawing overlay at 2K resolution');
+          // Pass base64 directly to ensure we're using the full resolution image
+          compositeBase64 = await getCompositeImage(drawingDataUrl, session.image.base64, session.image.mimeType);
         }
       }
       const activeInstructions: MaskInstruction[] = [];
@@ -308,7 +353,7 @@
         </div>
       {/if}
 
-      <div class="relative w-full aspect-square max-w-[500px] bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
+      <div class="relative w-full aspect-square max-w-[1000px] bg-zinc-900 rounded-2xl border border-zinc-800 overflow-hidden">
         {#if !currentImage && !isLoading}
           <div class="absolute inset-0 flex flex-col items-center justify-center text-zinc-600 gap-3">
             <ImageIcon class="w-12 h-12 opacity-50" />
@@ -343,7 +388,7 @@
         {/if}
       </div>
 
-      <div class="w-full max-w-[500px] flex flex-col gap-4 pb-8">
+      <div class="w-full max-w-[1000px] flex flex-col gap-4 pb-8">
         {#if currentImage}
           <div class="flex items-center justify-between p-3 bg-zinc-900/50 border border-zinc-800 rounded-xl">
             <div class="flex items-center gap-2">
